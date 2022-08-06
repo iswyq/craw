@@ -14,15 +14,18 @@ class Novel:
 
 
 def novel_download(name, url):
+    """
+        小说下载
+    :param name:小说的名字
+    :param url: 小说的阅读地址
+    :return:
+    """
     driver = webdriver.Chrome()
     driver.get(url)
     start = driver.find_element_by_xpath("/html/body/div[2]/div[5]/div[1]/div[1]/div[1]/div[2]/div[5]/a")
     book = start.get_attribute("href")
+    # 获取到小说的内容
     driver.get(book)
-    r = requests.get(url.replace("book", "showchapter"))
-    count = etree.HTML(r.text).xpath("//div[@class='volume-list']/div[2]/ul/li")
-    print()
-    "".replace()
 
 
 def novel_list_download(novels):
@@ -32,13 +35,15 @@ def novel_list_download(novels):
 
 def find_novel(name):
     """
-        TODO 所有查询出来的小说结果应封装成一个对象
+        TODO 使用request库进行小说查询
+
     :param name:
     :return:
     """
     novel = []
     novel_name_list = []
     novel_href_list = []
+    novel_chaptercount_list = []
     driver = webdriver.Chrome()
     driver.get("http://betawww.zongheng.com/")
     # 等待页面加载完成
@@ -56,13 +61,45 @@ def find_novel(name):
     driver.switch_to.window(new_window)
     # 获得多个结果
     res_names = driver.find_elements_by_xpath("//div[@class='fl se-result-infos']/h2")
+    # 小说的名字
     for res_name in res_names:
         novel_name_list.append(res_name.text)
     res_hrefs = driver.find_elements_by_xpath("//div[@class='fl se-result-infos']/h2/a")
+    # 小说的阅读链接
     for res_href in res_hrefs:
+        # 'http://book.zongheng.com/book/744186.html'
         novel_href_list.append(res_href.get_attribute("href"))
+        # 小说的章节
+        # 匹配章节的正则
+        """
+            这里使用正则不方便对url中的第二个book进行替换。因为：
+            1.regex的sub方法只能对匹配的项进行替换，可以指定的参数是替换多少次
+            2.regex的search方法只能查找返回第一个匹配的项；可以通过首先编译regex获得pattern对象,执行search方法时指定开始位置.
+                返回的结果是一个绝对位置。即在整个字符串中的位置。
+                for example：
+                string："http://book.zongheng.com/book/744186.html"
+                re.compile(r'book').search(string,pos=12)
+                返回的结果是25,29(即第二个book)所在位置。25是在string当中的绝对位置
+            解决思路：
+            1.通过在小说页面内容中获取到对应的目录链接
+            2.根据小说的页面链接，并进行目录链接组装
+        """
+        showchapter = "http://book.zongheng.com/showchapter/" + res_href.get_attribute("href").split("/")[-1]
+        # request 小说目录
+        r = requests.get(showchapter)
+        # 网页内容转换为html，使用xpath捕获记录总章节数的标签
+        # 共12章
+        em_count = etree.HTML(r.text).xpath("/html/body/div[3]/div[2]/div[2]/div/div/em[2]")
+        if len(em_count) != 0:
+            count_str = em_count[0].text
+            count = re.search(r'\d+', count_str)
+            novel_chaptercount_list.append(int(count.group()))
+        else:
+            novel_chaptercount_list.append(0)
+            continue
+    # 存储小说的列表
     for i in range(len(novel_name_list)):
-        novel.append(Novel(novel_name_list[i], novel_href_list[i]))
+        novel.append(Novel(novel_name_list[i], novel_href_list[i],count=novel_chaptercount_list[i]))
     driver.quit()
     return novel
 
@@ -180,11 +217,34 @@ def baidu_clik():
         print(e.text)
     driver.close()
 
+
 def test_re():
-    re.compile("")
+    """
+        需要将http://book.zongheng.com/book/744186.html转换成
+            'http://book.zongheng.com/showchapter/744186.html'
+    :return:
+    """
+    pattern = re.compile(r"book")
+    content_url = "http://book.zongheng.com/showchapter/744186.html"
+    text_url = "https://book.zongheng.com/chapter/744186/41101971.html"
+    res = pattern.sub("showchapter", "http://book.zongheng.com/book/744186.html")
+    res = re.subn(r'oo', "你好", "http://book.zongheng.com/book/744186.html", 2)
+    """
+        search方法只能返回第一个匹配的结果，但是可以通过指定开始的位置来进行调整
+    """
+    res1 = re.search(r'book', "http://book.zongheng.com/book/744186.html")
+    res = pattern.search("http://book.zongheng.com/book/744186.html", pos=11)
+    print(res)
+    print("http://book.zongheng.com/book/744186.html"[25:29])
+    '''print(res.group(0))  # 表示匹配的结果
+    print(res.span())  # 匹配成功的位置
+    print(res.start())  # 匹配的开始位置
+    print(res.end())  # 匹配的结束位置
+    '''
+
 
 if __name__ == '__main__':
-    # test()
+    # test_re()
     # novel_zongheng()
     # finders()
     # baidu_clik()
