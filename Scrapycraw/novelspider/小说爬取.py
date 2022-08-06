@@ -1,4 +1,5 @@
 from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 import time
 import requests
@@ -13,7 +14,7 @@ class Novel:
         self.href = href
 
 
-def novel_download(name, url):
+def novel_download(name, url, count):
     """
         小说下载
     :param name:小说的名字
@@ -23,14 +24,41 @@ def novel_download(name, url):
     driver = webdriver.Chrome()
     driver.get(url)
     start = driver.find_element_by_xpath("/html/body/div[2]/div[5]/div[1]/div[1]/div[1]/div[2]/div[5]/a")
+    # 'http://book.zongheng.com/chapter/744186/41101971.html'
     book = start.get_attribute("href")
     # 获取到小说的内容
     driver.get(book)
+    time.sleep(0.5)
+    with open(name + ".txt", encoding="utf-8", mode="a+") as f:
+        for i in range(count):
+            try:
+                chapter = driver.find_element_by_xpath("//div[@class='title_txtbox']").text
+                # 涉及到访问权限，后续章节需要开通VIP才可查看。
+                content = driver.find_element_by_xpath("//div[@class='content']").text
+                next_page_button = driver.find_element_by_xpath("//div[@class='chap_btnbox']/a[3]")
+                f.write(chapter)
+                f.write(content+"\n")
+                driver.execute_script("arguments[0].click()", next_page_button)
+                time.sleep(0.3)
+                # 找出新窗口：
+                new_window = driver.window_handles[-1]  # '-1'代表打开的最后一个窗口
+                # 切换到新窗口：
+                driver.switch_to.window(new_window)
+                """
+                    如何关闭旧窗口
+                """
+            except NoSuchElementException:
+                # 当无法找到下一章按钮时，结束循环
+                print(NoSuchElementException.msg)
+                break
+        f.close()
+    print(name, "--下载完成")
+    driver.quit()
 
 
 def novel_list_download(novels):
     for novel in novels:
-        novel_download(novel.name, novel.href)
+        novel_download(novel.name, novel.href, novel.count)
 
 
 def find_novel(name):
@@ -99,7 +127,7 @@ def find_novel(name):
             continue
     # 存储小说的列表
     for i in range(len(novel_name_list)):
-        novel.append(Novel(novel_name_list[i], novel_href_list[i],count=novel_chaptercount_list[i]))
+        novel.append(Novel(novel_name_list[i], novel_href_list[i], count=novel_chaptercount_list[i]))
     driver.quit()
     return novel
 
