@@ -4,7 +4,7 @@ from selenium.webdriver.common.by import By
 import time
 import requests
 from lxml import etree
-import re
+import re, json
 
 
 class Novel:
@@ -12,6 +12,40 @@ class Novel:
         self.name = name
         self.count = count
         self.href = href
+
+
+def find_novel_requests(name):
+    """
+        使用requests库进行操作
+    :param name: 待查询小说的名字
+    :return: 查询的结果集
+    """
+    response = requests.get("http://search.zongheng.com/s?keyword=%E9%9B%AA%E4%B8%AD%E6%82%8D%E5%88%80%E8%A1%8C")
+    html = etree.HTML(response.text)
+    # 这里在响应中 对查询的结果使用了font标签，无法直接获取到结果
+    res_href = html.xpath("//h2[@class='tit']/a/@href")
+    for i in res_href:
+        # 进入到小说的介绍页面
+        res = requests.get(i)
+        # 小说阅读页面
+        novel_first = etree.HTML(res.text).xpath("//div[@class='btn-group']/a/@href")[0].replace("chapter", "totaltome")
+        novel_title = etree.HTML(res.text).xpath("//div[@class='book-name']")
+        bookId_and_chapterId = re.findall(r'\d+', novel_first)
+        with open(novel_title[0].text.strip() + ".txt", mode='a+', encoding='utf-8') as f:
+            for i in range(161):
+                url = "http://book.zongheng.com/api/chapter/chapterinfo?" + "bookId=" + bookId_and_chapterId[
+                    0] + "&" + "chapterId=" + bookId_and_chapterId[1] + "&_=" + str(time.time_ns())[0:13]
+                # 获得json数据
+                response = requests.get(url)
+                # 解析json数据
+                res_dic = json.loads(response.text)
+                # 更新下一章的标号
+                bookId_and_chapterId[1] = str(res_dic["data"]["nexCid"])
+                context = res_dic["data"]["content"].replace("<p>", "").replace("</p>", "\n")
+                title = res_dic["data"]["chapterName"]
+                f.write(title + "\n")
+                f.write(context + "\n\n")
+            f.close()
 
 
 def novel_download(name, url, count):
@@ -37,7 +71,7 @@ def novel_download(name, url, count):
                 content = driver.find_element_by_xpath("//div[@class='content']").text
                 next_page_button = driver.find_element_by_xpath("//div[@class='chap_btnbox']/a[3]")
                 f.write(chapter)
-                f.write(content+"\n")
+                f.write(content + "\n")
                 driver.execute_script("arguments[0].click()", next_page_button)
                 time.sleep(0.3)
                 # 找出新窗口：
@@ -277,5 +311,6 @@ if __name__ == '__main__':
     # finders()
     # baidu_clik()
     # novel_download("https://m.zongheng.com/h5/chapter?bookid=1194663&cid=67802533&fpage=36&fmodule=23&_st=33_308-1_1194663")
-    res = find_novel("斗破苍穹")
-    novel_list_download(res)
+    # res = find_novel("斗破苍穹")
+    # novel_list_download(res)
+    find_novel_requests("")
